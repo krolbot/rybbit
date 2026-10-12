@@ -3,6 +3,10 @@ import { authedFetch } from "../api/utils";
 
 interface Configs {
   disableSignup: boolean;
+  oidcProvider: {
+    providerId: "oidc";
+    name: string;
+  } | null;
   mapboxToken: string;
   liteDashboard: boolean;
 }

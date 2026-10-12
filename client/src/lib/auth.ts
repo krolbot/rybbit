@@ -37,5 +37,5 @@ export const authClient = createAuthClient({
   fetchOptions: {
     credentials: "include",
   },
-  socialProviders: ["google", "github", "twitter"],
+  socialProviders: ["google", "github", "twitter", "oidc"],
 });

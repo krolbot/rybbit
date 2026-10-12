@@ -42,6 +42,18 @@ There are two ways to start using Rybbit:
 
 📚 Explore our [documentation](https://rybbit.com/docs) to learn more about installation, configuration, and usage.
 
+### External OpenID Connect login
+
+This fork supports one external OIDC provider through `OIDC_CLIENT_ID`,
+`OIDC_CLIENT_SECRET`, `OIDC_DISCOVERY_URL`, and `OIDC_PROVIDER_NAME`. Register
+`<BASE_URL>/api/auth/callback/oidc` as the exact redirect URI. ID tokens are
+verified through the provider discovery document and JWKS. New OIDC users are
+blocked by default. Existing users must have the same verified email address;
+unverified password accounts are deliberately not linked because that permits
+account takeover. Set `OIDC_DISABLE_SIGNUP=false` only during an intentional
+provisioning window. PKCE is enabled by default and can be disabled with
+`OIDC_PKCE=false` only for a provider that does not support it.
+
 <hr>
 
 ## ✨ Key Features

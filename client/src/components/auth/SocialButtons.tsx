@@ -1,8 +1,9 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import { SiGithub } from "@icons-pack/react-simple-icons";
+import { SiGithub, SiOpenid } from "@icons-pack/react-simple-icons";
 import { authClient } from "@/lib/auth";
+import { useConfigs } from "@/lib/configs";
 import { IS_CLOUD } from "@/lib/const";
 import { useExtracted } from "next-intl";
 import Image from "next/image";
@@ -16,8 +17,22 @@ interface SocialButtonsProps {
 
 export function SocialButtons({ onError, callbackURL, mode = "signin", className = "" }: SocialButtonsProps) {
   const t = useExtracted();
+  const { configs, isLoading } = useConfigs();
 
-  if (!IS_CLOUD) return null;
+  if (isLoading || (!IS_CLOUD && !configs?.oidcProvider)) return null;
+
+  const handleOIDCAuth = async () => {
+    try {
+      const { error } = await authClient.signIn.social({
+        provider: "oidc",
+        ...(callbackURL ? { callbackURL } : {}),
+        ...(mode === "signup" && callbackURL ? { newUserCallbackURL: callbackURL } : {}),
+      });
+      if (error) onError(error.message ?? "OIDC sign-in failed");
+    } catch (error) {
+      onError(String(error));
+    }
+  };
 
   const handleSocialAuth = async (provider: "google" | "github" | "twitter") => {
     try {
@@ -35,14 +50,24 @@ export function SocialButtons({ onError, callbackURL, mode = "signin", className
   return (
     <>
       <div className={`flex flex-col gap-2 ${className}`}>
-        <Button type="button" onClick={() => handleSocialAuth("google")} className="h-11">
-          <Image src="/crawlers/Google.svg" alt="Google" width={16} height={16} />
-          {t("Continue with Google")}
-        </Button>
-        <Button type="button" onClick={() => handleSocialAuth("github")} className="h-11">
-          <SiGithub />
-          {t("Continue with GitHub")}
-        </Button>
+        {configs?.oidcProvider && (
+          <Button type="button" onClick={handleOIDCAuth} className="h-11">
+            <SiOpenid />
+            {configs.oidcProvider.name}
+          </Button>
+        )}
+        {IS_CLOUD && (
+          <>
+            <Button type="button" onClick={() => handleSocialAuth("google")} className="h-11">
+              <Image src="/crawlers/Google.svg" alt="Google" width={16} height={16} />
+              {t("Continue with Google")}
+            </Button>
+            <Button type="button" onClick={() => handleSocialAuth("github")} className="h-11">
+              <SiGithub />
+              {t("Continue with GitHub")}
+            </Button>
+          </>
+        )}
       </div>
       <div className="relative flex items-center text-xs uppercase">
         <div className="flex-1 border-t border-neutral-200 dark:border-neutral-800" />

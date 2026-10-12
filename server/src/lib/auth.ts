@@ -1,6 +1,6 @@
 import { betterAuth } from "better-auth";
 import { APIError, createAuthMiddleware, getSessionFromCtx } from "better-auth/api";
-import { admin, captcha, emailOTP, organization } from "better-auth/plugins";
+import { admin, captcha, emailOTP, genericOAuth, organization } from "better-auth/plugins";
 import { createAccessControl } from "better-auth/plugins/access";
 import { adminAc, defaultStatements, memberAc, ownerAc } from "better-auth/plugins/organization/access";
 import { createOAuthPlugins, getAuthBaseUrl } from "./oauth.js";
@@ -28,10 +28,12 @@ import {
 } from "./email/email.js";
 import { getTrustedCorsOrigins } from "./cors.js";
 import { createServiceLogger } from "./logger/logger.js";
+import { getOIDCProvider } from "./oidc.js";
 
 dotenv.config();
 
 const authLogger = createServiceLogger("better-auth");
+const oidcProvider = getOIDCProvider();
 
 // The organization plugin's default access control, extended with an `apiKey`
 // resource. The @better-auth/api-key plugin consults it (via hasPermission)
@@ -61,6 +63,7 @@ const apiKeyRateLimit = { enabled: false };
 
 const pluginList = [
   admin(),
+  ...(oidcProvider ? [genericOAuth({ config: [oidcProvider] })] : []),
   ...createOAuthPlugins(getAuthBaseUrl()),
   apiKey([
     {
@@ -281,6 +284,15 @@ export const auth = betterAuth({
       clientSecret: process.env.GITHUB_CLIENT_SECRET!,
     },
   },
+  account: oidcProvider
+    ? {
+        encryptOAuthTokens: true,
+        accountLinking: {
+          trustedProviders: ["oidc"],
+          requireLocalEmailVerified: true,
+        },
+      }
+    : undefined,
   user: {
     additionalFields: {
       sendAutoEmailReports: {
