@@ -8,7 +8,7 @@ import dotenv from "dotenv";
 import { and, asc, eq, inArray } from "drizzle-orm";
 import pg from "pg";
 import { dash } from "@better-auth/infra";
-import { apiKey } from "@better-auth/api-key"
+import { apiKey } from "@better-auth/api-key";
 
 import { db } from "../db/postgres/postgres.js";
 import * as schema from "../db/postgres/schema.js";
@@ -28,7 +28,7 @@ import {
 } from "./email/email.js";
 import { getTrustedCorsOrigins } from "./cors.js";
 import { createServiceLogger } from "./logger/logger.js";
-import { getOIDCProvider } from "./oidc.js";
+import { getOIDCProvider, removeStoredOIDCIdToken } from "./oidc.js";
 
 dotenv.config();
 
@@ -230,11 +230,11 @@ const pluginList = [
   // Add Cloudflare Turnstile captcha (cloud only)
   ...(IS_CLOUD && process.env.TURNSTILE_SECRET_KEY && process.env.NODE_ENV === "production"
     ? [
-      captcha({
-        provider: "cloudflare-turnstile",
-        secretKey: process.env.TURNSTILE_SECRET_KEY,
-      }),
-    ]
+        captcha({
+          provider: "cloudflare-turnstile",
+          secretKey: process.env.TURNSTILE_SECRET_KEY,
+        }),
+      ]
     : []),
 ];
 
@@ -263,14 +263,7 @@ export const auth = betterAuth({
     disableSignUp: DISABLE_SIGNUP,
   },
   emailVerification: {
-    sendVerificationEmail: async ({
-      user,
-      url,
-    }: {
-      user: { email: string };
-      url: string;
-      token: string;
-    }) => {
+    sendVerificationEmail: async ({ user, url }: { user: { email: string }; url: string; token: string }) => {
       await sendEmailVerificationLink(user.email, url);
     },
   },
@@ -388,9 +381,17 @@ export const auth = betterAuth({
         },
       },
     },
+    account: {
+      create: {
+        before: async account => ({ data: removeStoredOIDCIdToken(account) }),
+      },
+      update: {
+        before: async account => ({ data: removeStoredOIDCIdToken(account) }),
+      },
+    },
   },
   hooks: {
-    before: createAuthMiddleware(async (ctx) => {
+    before: createAuthMiddleware(async ctx => {
       // Gate API key creation on better-auth's own /api-key/create route. This
       // is the only choke point that covers direct client calls — the Fastify
       // endpoints (createUserApiKey / createOrgApiKey) do richer plan checks

@@ -58,3 +58,7 @@ export function getOIDCProviderSummary(env: Env = process.env) {
   const provider = getOIDCProvider(env);
   return provider ? { providerId: provider.providerId, name: provider.name ?? provider.providerId } : null;
 }
+
+export function removeStoredOIDCIdToken<T extends { providerId?: string; idToken?: string | null }>(account: T): T {
+  return account.providerId === "oidc" && account.idToken ? { ...account, idToken: null } : account;
+}

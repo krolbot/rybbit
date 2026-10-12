@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { getOIDCProvider } from "./oidc.js";
+import { getOIDCProvider, removeStoredOIDCIdToken } from "./oidc.js";
 
 const completeEnv = {
   OIDC_CLIENT_ID: "rybbit",
@@ -55,5 +55,19 @@ describe("getOIDCProvider", () => {
     ).toThrow(/HTTPS/);
     expect(() => getOIDCProvider({ ...completeEnv, OIDC_DISCOVERY_URL: "not a URL" })).toThrow(/valid absolute URL/);
     expect(() => getOIDCProvider({ ...completeEnv, OIDC_PKCE: "sometimes" })).toThrow(/OIDC_PKCE/);
+  });
+});
+
+describe("removeStoredOIDCIdToken", () => {
+  it("drops only the OIDC ID token before account storage", () => {
+    expect(removeStoredOIDCIdToken({ providerId: "oidc", idToken: "jwt", accessToken: "encrypted" })).toEqual({
+      providerId: "oidc",
+      idToken: null,
+      accessToken: "encrypted",
+    });
+    expect(removeStoredOIDCIdToken({ providerId: "github", idToken: "jwt" })).toEqual({
+      providerId: "github",
+      idToken: "jwt",
+    });
   });
 });
