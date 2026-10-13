@@ -97,7 +97,7 @@ export async function resolveTrackingRequest(
   // Only a trusted bearer may speak for someone else; for everyone else the
   // payload's ip_address/user_agent are ignored rather than trusted.
   const ipAddress = trustedServerSideIngestion ? payload.ip_address || requestIpAddress : requestIpAddress;
-  const userAgent = trustedServerSideIngestion ? payload.user_agent || requestUserAgent : requestUserAgent;
+  const userAgent = trustedServerSideIngestion ? payload.user_agent || "" : requestUserAgent;
 
   return {
     payload,

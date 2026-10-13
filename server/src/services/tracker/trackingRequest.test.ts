@@ -104,6 +104,23 @@ describe("resolveTrackingRequest", () => {
     });
   });
 
+  it("does not treat the reporting server user agent as the visitor user agent", async () => {
+    mocks.checkApiKey.mockResolvedValue({
+      valid: true,
+      statements: { ingest: ["write"] },
+    });
+
+    const resolved = await resolveTrackingRequest(
+      request({ authorization: "Bearer sk_test", "user-agent": "ServerSDK/1.0" }),
+      payload()
+    );
+
+    expect(resolved).toMatchObject({
+      userAgent: "",
+      trustedServerSideIngestion: true,
+    });
+  });
+
   it("degrades an under-scoped bearer to untrusted client-side traffic", async () => {
     mocks.checkApiKey.mockResolvedValue({
       valid: true,

@@ -290,7 +290,8 @@ export async function checkBotBlocking({
   payload,
   lookupAsn: asnLookup = lookupAsn,
 }: BotBlockingInput): Promise<BotDetectionResult | null> {
-  const userAgent = payload.userAgent || (headers["user-agent"] as string) || "";
+  const userAgent =
+    payload.userAgent || (!trustedServerSideIngestion ? (headers["user-agent"] as string) || "" : "");
   const clientSignalResult = getClientSignalResult(payload, userAgent, !isMobileSite && !trustedServerSideIngestion);
   recordBotBlockingRequest(
     clientSignalResult.scoreForStats,

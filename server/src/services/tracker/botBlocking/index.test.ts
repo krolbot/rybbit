@@ -83,6 +83,17 @@ describe("checkBotBlocking", () => {
     expect(result).toBeNull();
   });
 
+  it("does not classify the reporting server user agent when no visitor user agent was reported", async () => {
+    const result = await checkBotBlocking({
+      headers: { "user-agent": "TunnlyBackend/1.0" },
+      blockBots: true,
+      trustedServerSideIngestion: true,
+      payload: basePayload,
+    });
+
+    expect(result).toBeNull();
+  });
+
   it("does not convict trusted server-side ingestion reporting a browser user agent", async () => {
     // Empty headers and a datacenter IP would convict ordinary traffic on the
     // header and ASN layers. Neither belongs to the visitor being reported.
