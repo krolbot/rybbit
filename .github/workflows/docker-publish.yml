@@ -1,10 +1,10 @@
 name: Docker Publish
 
 on:
+  workflow_dispatch:
   push:
     branches:
-      - master
-      - fix/trusted-ingest-transport-ua
+      - feat/oidc-v2.9.1
     tags:
       - "v*"
   pull_request:
