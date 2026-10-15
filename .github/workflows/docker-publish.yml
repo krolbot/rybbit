@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - master
+      - fix/trusted-ingest-transport-ua
     tags:
       - "v*"
   pull_request:
@@ -62,6 +63,9 @@ jobs:
           context: .
           file: ./client/Dockerfile
           platforms: ${{ matrix.platform }}
+          build-args: |
+            NEXT_PUBLIC_BACKEND_URL=https://rybbit.zaitsv.dev
+            NEXT_PUBLIC_DISABLE_SIGNUP=true
           labels: ${{ steps.meta.outputs.labels }}
           outputs: type=image,"name=ghcr.io/${{ env.REPO_OWNER }}/rybbit-client",push-by-digest=true,name-canonical=true
           push: "${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}"
