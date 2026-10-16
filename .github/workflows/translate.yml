@@ -41,7 +41,7 @@ jobs:
           # Must stay in sync with the `locales` array in client/next.config.ts —
           # the extractor writes empty keys to every locale listed there, and any
           # locale missing here is never checked and never translated.
-          for file in zh.json ja.json de.json pl.json pt.json it.json fr.json ko.json es.json cs.json uk.json; do
+          for file in zh.json ja.json de.json pl.json pt.json it.json fr.json ko.json es.json cs.json uk.json ru.json; do
             LANG_KEYS=$(python3 -c "import json; f=open('$file'); d=json.load(f); print(len(d))")
             EMPTY=$(python3 -c "import json; f=open('$file'); d=json.load(f); print(sum(1 for v in d.values() if v == ''))")
             if [ "$EMPTY" -gt 0 ] || [ "$LANG_KEYS" -ne "$EN_KEYS" ]; then
@@ -92,7 +92,7 @@ jobs:
 
             Check the translation files in client/messages/. The source of truth is en.json.
 
-            For each non-English translation file (zh.json, ja.json, de.json, pl.json, pt.json, it.json, fr.json, ko.json, es.json, cs.json, uk.json):
+            For each non-English translation file (zh.json, ja.json, de.json, pl.json, pt.json, it.json, fr.json, ko.json, es.json, cs.json, uk.json, ru.json):
             1. Find any keys that have empty string values (these are newly extracted, untranslated strings)
             2. Find any keys in the translation file that still have English text (were not actually translated)
             3. Translate the missing/untranslated strings into the appropriate language using en.json as reference
@@ -111,6 +111,7 @@ jobs:
             - es.json = Spanish
             - cs.json = Czech
             - uk.json = Ukrainian
+            - ru.json = Russian
 
             Important:
             - Preserve {placeholder} variables exactly as they appear in the English strings

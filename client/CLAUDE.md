@@ -18,7 +18,7 @@ This file provides guidance to Claude Code when working in the `/client` directo
 - **Server state**: TanStack React Query 5
 - **Auth**: Better-auth (admin, organization, emailOTP, apiKey plugins)
 - **Forms**: React Hook Form + Zod
-- **i18n**: next-intl (10 locales: en, de, fr, zh, es, pl, it, ko, pt, ja)
+- **i18n**: next-intl (13 locales: en, de, fr, zh, es, pl, it, ko, pt, ja, cs, uk, ru)
 - **Charts**: Nivo (bar, calendar, line), D3, Mapbox GL
 - **Date/time**: Luxon, date-fns
 - **URL state**: nuqs (query string), vaul (drawer)

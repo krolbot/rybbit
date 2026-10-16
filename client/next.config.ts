@@ -9,7 +9,7 @@ const withNextIntl = createNextIntlPlugin({
       sourceLocale: "en",
       path: "./messages",
       format: "json",
-      locales: ["en", "de", "fr", "zh", "es", "pl", "it", "ko", "pt", "ja", "cs", "uk"],
+      locales: ["en", "de", "fr", "zh", "es", "pl", "it", "ko", "pt", "ja", "cs", "uk", "ru"],
     },
   },
 });
