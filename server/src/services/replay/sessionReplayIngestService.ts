@@ -1,5 +1,5 @@
-import { DateTime } from "luxon";
 import { clickhouse } from "../../db/clickhouse/clickhouse.js";
+import { toClickHouseDateTime } from "../../db/clickhouse/dateTime.js";
 import { RecordSessionReplayRequest } from "../../types/sessionReplay.js";
 import { createServiceLogger } from "../../lib/logger/logger.js";
 import { correctReplayClockSkew } from "./replayClockSkew.js";
@@ -8,6 +8,7 @@ import { sessionsService } from "../sessions/sessionsService.js";
 import { userIdService } from "../userId/userIdService.js";
 import { r2Storage } from "../storage/r2StorageService.js";
 import { siteConfig } from "../../lib/siteConfig.js";
+import { chargeReplaySessionBudget } from "./replaySessionBudget.js";
 
 const logger = createServiceLogger("session-replay-ingest");
 
@@ -19,6 +20,11 @@ type BatchStats = {
   compressedSizeBytes: number;
   screenWidth: number;
   screenHeight: number;
+};
+
+export type RecordEventsResult = {
+  /** The session is over its replay size cap; nothing from this batch was stored. */
+  capped: boolean;
 };
 
 export interface RequestMetadata {
@@ -37,7 +43,7 @@ export class SessionReplayIngestService {
     siteId: number,
     request: RecordSessionReplayRequest,
     requestMeta?: RequestMetadata
-  ): Promise<void> {
+  ): Promise<RecordEventsResult> {
     const { userId: clientUserId, events: rawEvents, metadata } = request;
 
     // Device clocks, not ours. Correct the whole batch onto server time before
@@ -70,6 +76,18 @@ export class SessionReplayIngestService {
       siteId,
     });
 
+    // Serialize once: the sizes gate the batch before anything is written, and
+    // the same strings are what ClickHouse stores.
+    const serializedEvents = events.map(event => JSON.stringify(event.data));
+    const batchBytes = serializedEvents.reduce((total, data) => total + data.length, 0);
+
+    // Checked before the R2 upload and both inserts, so a runaway session costs
+    // one Redis call per batch once it's capped.
+    const budget = await chargeReplaySessionBudget(siteId, sessionId, batchBytes);
+    if (!budget.accepted) {
+      return { capped: true };
+    }
+
     // Check if R2 storage is enabled for cloud deployments
     let r2BatchKey: string | null = null;
     let eventDataArray: any[] = [];
@@ -89,7 +107,7 @@ export class SessionReplayIngestService {
 
     // Prepare events for batch insert
     const eventsToInsert = events.map((event, index) => {
-      const serializedData = JSON.stringify(event.data);
+      const serializedData = serializedEvents[index];
 
       if (r2BatchKey) {
         // R2 storage: store metadata only in ClickHouse
@@ -98,7 +116,7 @@ export class SessionReplayIngestService {
           session_id: sessionId,
           user_id: userId,
           identified_user_id: identifiedUserId,
-          timestamp: event.timestamp,
+          timestamp: toClickHouseDateTime(event.timestamp),
           event_type: event.type,
           event_data: "", // Empty string when using R2
           event_data_key: r2BatchKey,
@@ -116,7 +134,7 @@ export class SessionReplayIngestService {
           session_id: sessionId,
           user_id: userId,
           identified_user_id: identifiedUserId,
-          timestamp: event.timestamp,
+          timestamp: toClickHouseDateTime(event.timestamp),
           event_type: event.type,
           event_data: serializedData,
           event_data_key: null,
@@ -164,6 +182,8 @@ export class SessionReplayIngestService {
         requestMeta
       );
     }
+
+    return { capped: false };
   }
 
   private async updateSessionMetadata(
@@ -209,8 +229,8 @@ export class SessionReplayIngestService {
           session_id: sessionId,
           user_id: userId,
           identified_user_id: identifiedUserId,
-          start_time: DateTime.fromJSDate(batchStats.startTime).toFormat("yyyy-MM-dd HH:mm:ss.SSS"),
-          end_time: DateTime.fromJSDate(batchStats.endTime).toFormat("yyyy-MM-dd HH:mm:ss.SSS"),
+          start_time: toClickHouseDateTime(batchStats.startTime),
+          end_time: toClickHouseDateTime(batchStats.endTime),
           event_count: batchStats.eventCount,
           compressed_size_bytes: batchStats.compressedSizeBytes,
           page_url: metadata.pageUrl || "",

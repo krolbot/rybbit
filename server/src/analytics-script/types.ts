@@ -7,6 +7,7 @@ export interface ScriptConfig {
   autoTrackPageview: boolean;
   autoTrackSpa: boolean;
   trackQuerystring: boolean;
+  trackUrlFragments: boolean;
   trackOutbound: boolean;
   enableWebVitals: boolean;
   trackErrors: boolean;
@@ -156,6 +157,12 @@ export interface SessionReplayEvent {
   type: string | number;
   data: any;
   timestamp: number;
+}
+
+/** What the server answers to a replay batch, as far as the recorder cares. */
+export interface SessionReplayBatchResult {
+  /** The session hit its replay size cap; stop recording for this page. */
+  stopRecording?: boolean;
 }
 
 export interface SessionReplayBatch {

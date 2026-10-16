@@ -42,6 +42,8 @@ There are two ways to start using Rybbit:
 
 📚 Explore our [documentation](https://rybbit.com/docs) to learn more about installation, configuration, and usage.
 
+To work on the client and backend locally, see the [pnpm workspace setup](CONTRIBUTE.md#local-development).
+
 ### External OpenID Connect login
 
 This fork supports one external OIDC provider through `OIDC_CLIENT_ID`,

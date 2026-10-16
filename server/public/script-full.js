@@ -66,6 +66,17 @@
     }
   }
 
+  // url.ts
+  function getTrackedPathname(url, trackUrlFragments = false) {
+    if (url.hash.startsWith("#/")) {
+      return url.hash.substring(1);
+    }
+    if (url.hash.startsWith("#!/")) {
+      return url.hash.substring(2);
+    }
+    return url.pathname + (trackUrlFragments ? url.hash : "");
+  }
+
   // config.ts
   var FEATURE_FLAG_REQUEST_TIMEOUT_MS = 2e3;
   function createVisitorId() {
@@ -96,13 +107,7 @@
       return void 0;
     }
   }
-  function getEvaluationPathname(url) {
-    if (url.hash && url.hash.startsWith("#/")) {
-      return url.hash.substring(1);
-    }
-    return url.pathname;
-  }
-  async function fetchFeatureFlags(analyticsHost, siteId, namespace, visitorId) {
+  async function fetchFeatureFlags(analyticsHost, siteId, namespace, visitorId, trackUrlFragments) {
     const controller = new AbortController();
     const timeout = window.setTimeout(() => controller.abort(), FEATURE_FLAG_REQUEST_TIMEOUT_MS);
     try {
@@ -118,7 +123,7 @@
           anonymousId: visitorId,
           identifiedUserId: getIdentifiedUserId(namespace),
           hostname: url.hostname,
-          pathname: getEvaluationPathname(url),
+          pathname: getTrackedPathname(url, trackUrlFragments),
           querystring: url.search,
           query: Object.fromEntries(url.searchParams.entries()),
           referrer: document.referrer,
@@ -166,7 +171,7 @@
       return null;
     }
     const namespace = scriptTag.getAttribute("data-namespace") || "rybbit";
-    const visitorId = getOrCreateVisitorId(namespace);
+    const visitorId = createVisitorId();
     const skipPatterns = parseJsonSafely(scriptTag.getAttribute("data-skip-patterns"), []);
     const maskPatterns = parseJsonSafely(scriptTag.getAttribute("data-mask-patterns"), []);
     const sessionReplayMaskTextSelectors = parseJsonSafely(
@@ -209,6 +214,7 @@
       autoTrackPageview: true,
       autoTrackSpa: true,
       trackQuerystring: true,
+      trackUrlFragments: false,
       trackOutbound: true,
       enableWebVitals: false,
       trackErrors: false,
@@ -248,6 +254,7 @@
           autoTrackPageview: apiConfig.trackInitialPageView ?? defaultConfig.autoTrackPageview,
           autoTrackSpa: apiConfig.trackSpaNavigation ?? defaultConfig.autoTrackSpa,
           trackQuerystring: apiConfig.trackUrlParams ?? defaultConfig.trackQuerystring,
+          trackUrlFragments: apiConfig.trackUrlFragments ?? defaultConfig.trackUrlFragments,
           trackOutbound: apiConfig.trackOutbound ?? defaultConfig.trackOutbound,
           enableWebVitals: apiConfig.webVitals ?? defaultConfig.enableWebVitals,
           trackErrors: apiConfig.trackErrors ?? defaultConfig.trackErrors,
@@ -264,7 +271,14 @@
       console.warn("Error fetching tracking config:", error);
     }
     if (resolvedConfig.featureFlagsEnabled) {
-      const result = await fetchFeatureFlags(analyticsHost, siteId, namespace, visitorId);
+      resolvedConfig.visitorId = getOrCreateVisitorId(namespace);
+      const result = await fetchFeatureFlags(
+        analyticsHost,
+        siteId,
+        namespace,
+        resolvedConfig.visitorId,
+        resolvedConfig.trackUrlFragments
+      );
       resolvedConfig.featureFlagsEnabled = result.enabled;
       resolvedConfig.featureFlags = result.flags;
     }
@@ -291,6 +305,9 @@
   var SessionReplayRecorder = class {
     constructor(config, userId, sendBatch) {
       this.isRecording = false;
+      // Set once the server reports the session is over its size cap; recording
+      // stays off for the rest of this page.
+      this.capped = false;
       this.eventBuffer = [];
       this.config = config;
       this.userId = userId;
@@ -324,7 +341,7 @@
       });
     }
     startRecording() {
-      if (this.isRecording || !window.rrweb || !this.config.enableSessionReplay) {
+      if (this.capped || this.isRecording || !window.rrweb || !this.config.enableSessionReplay) {
         return;
       }
       try {
@@ -451,10 +468,24 @@
         }
       };
       try {
-        await this.sendBatch(batch);
+        const result = await this.sendBatch(batch);
+        if (result?.stopRecording) {
+          this.stopForSizeCap();
+        }
       } catch (error) {
         this.eventBuffer.unshift(...events);
       }
+    }
+    // Unlike stopRecording, drops what's buffered: the server refuses it anyway.
+    stopForSizeCap() {
+      this.capped = true;
+      if (this.stopRecordingFn) {
+        this.stopRecordingFn();
+        this.stopRecordingFn = void 0;
+      }
+      this.isRecording = false;
+      this.clearBatchTimer();
+      this.eventBuffer = [];
     }
     // Update user ID when it changes
     updateUserId(userId) {
@@ -683,6 +714,7 @@
       this.errorDedupeLastCleanup = 0;
       this.exposedFeatureFlags = /* @__PURE__ */ new Set();
       this.config = config;
+      this.lastPageviewUrl = this.getPageviewUrl();
       this.loadUserId();
       if (config.enableSessionReplay) {
         this.initializeSessionReplay();
@@ -707,7 +739,7 @@
     }
     getCurrentUrlContext() {
       const url = new URL(window.location.href);
-      const pathname = url.hash && url.hash.startsWith("#/") ? url.hash.substring(1) : url.pathname;
+      const pathname = getTrackedPathname(url, this.config.trackUrlFragments);
       return {
         hostname: url.hostname,
         pathname,
@@ -772,8 +804,9 @@
       }
     }
     async sendSessionReplayBatch(batch) {
+      let response;
       try {
-        await fetch(`${this.config.analyticsHost}/session-replay/record/${this.config.siteId}`, {
+        response = await fetch(`${this.config.analyticsHost}/session-replay/record/${this.config.siteId}`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json"
@@ -787,13 +820,15 @@
         console.error("Failed to send session replay batch:", error);
         throw error;
       }
+      try {
+        return await response.json();
+      } catch {
+        return;
+      }
     }
     createBasePayload() {
       const url = new URL(window.location.href);
-      let pathname = url.pathname;
-      if (url.hash && url.hash.startsWith("#/")) {
-        pathname = url.hash.substring(1);
-      }
+      let pathname = getTrackedPathname(url, this.config.trackUrlFragments);
       if (findMatchingPattern(pathname, this.config.skipPatterns)) {
         return null;
       }
@@ -868,7 +903,21 @@
       this.sendTrackingData(payload);
     }
     trackPageview() {
+      this.lastPageviewUrl = this.getPageviewUrl();
       this.track("pageview");
+    }
+    trackPageviewIfUrlChanged() {
+      if (this.getPageviewUrl() !== this.lastPageviewUrl) {
+        this.trackPageview();
+      }
+    }
+    getPageviewUrl() {
+      const url = new URL(window.location.href);
+      return JSON.stringify([
+        url.hostname,
+        getTrackedPathname(url, this.config.trackUrlFragments),
+        this.config.trackQuerystring ? url.search : ""
+      ]);
     }
     trackEvent(name, properties = {}) {
       this.track("custom_event", name, properties);
@@ -1101,7 +1150,7 @@
     }
   };
 
-  // ../../node_modules/web-vitals/dist/web-vitals.js
+  // ../../../node_modules/.pnpm/web-vitals@5.1.0/node_modules/web-vitals/dist/web-vitals.js
   var e = -1;
   var t = (t2) => {
     addEventListener("pageshow", ((n2) => {
@@ -1552,6 +1601,7 @@
     }
     handleChange(event) {
       const target = event.target;
+      if (!(target instanceof Element)) return;
       const tagName = target.tagName.toUpperCase();
       if (!["INPUT", "SELECT", "TEXTAREA"].includes(tagName)) return;
       if (target.disabled) return;
@@ -1686,7 +1736,7 @@
         });
       });
     }
-    const trackPageview = () => tracker.trackPageview();
+    const trackPageview = () => tracker.trackPageviewIfUrlChanged();
     const debouncedTrackPageview = config.debounceDuration > 0 ? debounce(trackPageview, config.debounceDuration) : trackPageview;
     function setupEventListeners() {
       document.addEventListener("click", function(e2) {

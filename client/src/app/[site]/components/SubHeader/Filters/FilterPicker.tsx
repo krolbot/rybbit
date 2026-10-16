@@ -4,7 +4,6 @@ import { Filter, FilterParameter, FilterType } from "@rybbit/shared";
 import { Check, ChevronLeft, ChevronRight, ChevronsUpDown, HelpCircle, Plus } from "lucide-react";
 import { useExtracted } from "next-intl";
 import { useMemo, useState } from "react";
-import { useMetric } from "../../../../../api/analytics/hooks/useGetMetric";
 import { Button } from "../../../../../components/ui/button";
 import { Checkbox } from "../../../../../components/ui/checkbox";
 import {
@@ -27,23 +26,24 @@ import {
   StringOperatorOptions,
 } from "./const";
 import { useOperatorLabel, useOperatorMenuLabel, useParameterLabel, validateRegex } from "./labels";
+import { useFilterValueOptions } from "./useFilterValueOptions";
 
 function RegexExamples() {
   const t = useExtracted();
   return (
     <ul className="text-xs space-y-1">
       <li>
-        <code className="bg-neutral-100 dark:bg-neutral-800 px-1 rounded">{"^/blog/"}</code>
+        <code className="bg-neutral-100 dark:bg-neutral-700 px-1 rounded">{"^/blog/"}</code>
         <span className="text-neutral-500 ml-1">— {t("Paths starting with /blog/")}</span>
       </li>
       <li>
-        <code className="bg-neutral-100 dark:bg-neutral-800 px-1 rounded">{"/blog/.*"}</code>
+        <code className="bg-neutral-100 dark:bg-neutral-700 px-1 rounded">{"/blog/.*"}</code>
         <span className="text-neutral-500 ml-1">
           — {t("Paths containing /blog/ followed by anything")}
         </span>
       </li>
       <li>
-        <code className="bg-neutral-100 dark:bg-neutral-800 px-1 rounded">{"\\.(pdf|doc|docx)$"}</code>
+        <code className="bg-neutral-100 dark:bg-neutral-700 px-1 rounded">{"\\.(pdf|doc|docx)$"}</code>
         <span className="text-neutral-500 ml-1">— {t("Paths ending in .pdf, .doc, or .docx")}</span>
       </li>
     </ul>
@@ -86,11 +86,7 @@ function ValueStep({
   const needsTextInput = isNumeric || isRegex || isNumericComparison;
   const operatorOptions = isNumeric ? NumericOperatorOptions : StringOperatorOptions;
 
-  const { data, isFetching } = useMetric({
-    parameter,
-    limit: 1000,
-    useFilters: false,
-  });
+  const { data, isFetching } = useFilterValueOptions(parameter);
 
   const getValueLabel = (val: string | number) => {
     if (parameter === "country") return getCountryName(val as string);
@@ -175,7 +171,7 @@ function ValueStep({
 
   return (
     <div className="flex flex-col">
-      <div className="flex items-center justify-between px-2 py-2 border-b border-neutral-200 dark:border-neutral-800">
+      <div className="flex items-center justify-between px-2 py-2 border-b border-neutral-200 dark:border-neutral-700">
         <button
           type="button"
           onClick={onBack}
@@ -205,8 +201,8 @@ function ValueStep({
                     type="button"
                     onClick={() => selectOperator(option.value as FilterType)}
                     className={cn(
-                      "text-left px-3 py-2 text-sm hover:bg-neutral-100 dark:hover:bg-neutral-800",
-                      isSelected && "bg-neutral-100 dark:bg-neutral-800"
+                      "text-left px-3 py-2 text-sm hover:bg-neutral-100 dark:hover:bg-neutral-750",
+                      isSelected && "bg-neutral-100 dark:bg-neutral-750"
                     )}
                   >
                     {getOperatorMenuLabel(option.value as FilterType, isNumeric)}
@@ -300,7 +296,7 @@ function ValueStep({
         )
       )}
       {needsValue && (
-        <div className="border-t border-neutral-200 dark:border-neutral-800 p-2">
+        <div className="border-t border-neutral-200 dark:border-neutral-700 p-2">
           <Button
             type="button"
             size="sm"

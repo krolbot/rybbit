@@ -1,3 +1,4 @@
+vi.mock("../../services/lifecycleEmails/platformDetect.js", () => ({ detectPlatform: vi.fn(async () => null) }));
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const state = vi.hoisted(() => ({
@@ -9,10 +10,15 @@ const state = vi.hoisted(() => ({
 const mocks = vi.hoisted(() => ({
   getSubscriptionInner: vi.fn(),
   invalidateSitesAccessCache: vi.fn(),
+  requestOrganizationRefresh: vi.fn(),
 }));
 
 vi.mock("../../db/postgres/postgres.js", () => ({
   db: {
+    execute: vi.fn(async () => []),
+    async transaction<T>(operation: (tx: unknown) => Promise<T>): Promise<T> {
+      return operation(this);
+    },
     select: vi.fn(() => ({
       from: () => ({
         where: async () => Array.from({ length: state.existingSiteCount }, (_, i) => ({ siteId: i + 1 })),
@@ -41,6 +47,10 @@ vi.mock("../../lib/const.js", async importOriginal => {
 
 vi.mock("../stripe/getSubscription.js", () => ({
   getSubscriptionInner: mocks.getSubscriptionInner,
+}));
+
+vi.mock("../../services/usageService.js", () => ({
+  usageService: { requestOrganizationRefresh: mocks.requestOrganizationRefresh },
 }));
 
 vi.mock("../../lib/auth-utils.js", () => ({
@@ -178,6 +188,9 @@ describe("addSite — cloud standard-feature gating (active subscription require
 
     expect(reply.statusCode).toBe(201);
     expect(state.insertedValues).toHaveLength(1);
+    // The site is created, but the usage service is asked to block it right away until the
+    // organization starts a plan.
+    expect(mocks.requestOrganizationRefresh).toHaveBeenCalledWith(state.insertedValues[0].organizationId);
   });
 });
 

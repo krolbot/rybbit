@@ -4,6 +4,7 @@ import {
   TrackingPayload,
   WebVitalsData,
   SessionReplayBatch,
+  SessionReplayBatchResult,
   ButtonClickProperties,
   CopyProperties,
   FormSubmitProperties,
@@ -12,6 +13,7 @@ import {
 import { findMatchingPattern } from "./utils.js";
 import { SessionReplayRecorder } from "./sessionReplay.js";
 import { getBotScore, getBotSignalMask } from "./botSignals.js";
+import { getTrackedPathname } from "./url.js";
 
 const FEATURE_FLAG_REQUEST_TIMEOUT_MS = 2000;
 
@@ -22,8 +24,10 @@ export class Tracker {
   private errorDedupeCache: Map<string, number> = new Map();
   private errorDedupeLastCleanup = 0;
   private exposedFeatureFlags = new Set<string>();
+  private lastPageviewUrl: string;
   constructor(config: ScriptConfig) {
     this.config = config;
+    this.lastPageviewUrl = this.getPageviewUrl();
     this.loadUserId();
 
     if (config.enableSessionReplay) {
@@ -55,7 +59,7 @@ export class Tracker {
 
   private getCurrentUrlContext() {
     const url = new URL(window.location.href);
-    const pathname = url.hash && url.hash.startsWith("#/") ? url.hash.substring(1) : url.pathname;
+    const pathname = getTrackedPathname(url, this.config.trackUrlFragments);
 
     return {
       hostname: url.hostname,
@@ -127,9 +131,10 @@ export class Tracker {
     }
   }
 
-  private async sendSessionReplayBatch(batch: SessionReplayBatch): Promise<void> {
+  private async sendSessionReplayBatch(batch: SessionReplayBatch): Promise<SessionReplayBatchResult | void> {
+    let response: Response;
     try {
-      await fetch(`${this.config.analyticsHost}/session-replay/record/${this.config.siteId}`, {
+      response = await fetch(`${this.config.analyticsHost}/session-replay/record/${this.config.siteId}`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -142,16 +147,18 @@ export class Tracker {
       console.error("Failed to send session replay batch:", error);
       throw error;
     }
+
+    // Some skip responses are plain text; only a JSON body can carry a stop signal.
+    try {
+      return (await response.json()) as SessionReplayBatchResult;
+    } catch {
+      return;
+    }
   }
 
   createBasePayload(): BasePayload | null {
     const url = new URL(window.location.href);
-    let pathname = url.pathname;
-
-    // Handle hash-based SPA routing
-    if (url.hash && url.hash.startsWith("#/")) {
-      pathname = url.hash.substring(1);
-    }
+    let pathname = getTrackedPathname(url, this.config.trackUrlFragments);
 
     // Check skip patterns
     if (findMatchingPattern(pathname, this.config.skipPatterns)) {
@@ -241,7 +248,23 @@ export class Tracker {
   }
 
   trackPageview(): void {
+    this.lastPageviewUrl = this.getPageviewUrl();
     this.track("pageview");
+  }
+
+  trackPageviewIfUrlChanged(): void {
+    if (this.getPageviewUrl() !== this.lastPageviewUrl) {
+      this.trackPageview();
+    }
+  }
+
+  private getPageviewUrl(): string {
+    const url = new URL(window.location.href);
+    return JSON.stringify([
+      url.hostname,
+      getTrackedPathname(url, this.config.trackUrlFragments),
+      this.config.trackQuerystring ? url.search : "",
+    ]);
   }
 
   trackEvent(name: string, properties: Record<string, any> = {}): void {
