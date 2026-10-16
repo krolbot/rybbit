@@ -7,6 +7,7 @@ import { REPLAY_BUDGET_LUA } from "./replayBudgetLua.js";
 
 const KEY = "replay:budget:42:session-1";
 const CAP = 1000;
+const SHORT_TTL_MS = 1_000;
 const TTL_MS = 60_000;
 
 interface BudgetMockRedis {
@@ -45,8 +46,8 @@ describe("replayBudgetCharge Lua script", () => {
 
   it("slides the TTL on refused batches too", async () => {
     await charge(CAP);
-    await redis.pexpire(KEY, 5);
+    await redis.pexpire(KEY, SHORT_TTL_MS);
     expect(await charge(10)).toEqual([0, CAP]);
-    expect(await redis.pttl(KEY)).toBeGreaterThan(5);
+    expect(await redis.pttl(KEY)).toBeGreaterThan(SHORT_TTL_MS);
   });
 });

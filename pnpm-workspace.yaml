@@ -9,6 +9,7 @@ autoInstallPeers: false
 # These were previously npm overrides in the client and server manifests.
 overrides:
   "@types/react": 19.2.7
+  "@hono/node-server": 2.1.5
   kysely: 0.28.17
   # framer-motion depends on motion-dom/motion-utils with caret ranges, so the
   # lockfile can pair it with a newer motion-dom whose render loop it doesn't
